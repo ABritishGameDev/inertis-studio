@@ -1,0 +1,53 @@
+name: Build Site and Publish to Public Repo
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout private source repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build React Web Portal
+        run: npm run build
+
+      - name: Checkout public release repo
+        uses: actions/checkout@v4
+        with:
+          repository: ABritishGamedev/inertis-studio
+          token: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          path: public-repo
+
+      - name: Copy built site into public repo docs/
+        run: |
+          rm -rf public-repo/docs
+          mkdir -p public-repo/docs
+          cp -r dist/* public-repo/docs/
+          cp public-repo/docs/index.html public-repo/docs/404.html
+          touch public-repo/docs/.nojekyll
+
+      - name: Commit and push built site to public repo
+        working-directory: public-repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          if git diff --staged --quiet; then
+            echo "No website changes to publish."
+          else
+            git commit -m "Deploy built website from private source"
+            git push origin main
+          fi
